@@ -39,7 +39,8 @@ public class SharedGamemode : ModuleRules
 				"ModularGameplay",
 				"NetCore", 
 				"BattleSpace",
-				"Json"
+				"Json",
+				"GASCompanion"
 			});
 			
 		

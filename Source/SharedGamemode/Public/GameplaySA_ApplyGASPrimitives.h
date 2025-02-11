@@ -18,15 +18,47 @@ Copyright 2021 Empires Team
 
 #include "CoreMinimal.h"
 #include "GameplayScenarioAction.h"
+#include "GameplayTagContainer.h"
+#include "Abilities/GSCAbilitySet.h"
 #include "GameplaySA_ApplyGASPrimitives.generated.h"
 
 
+/** Defines a target for GAS primitives and what to apply */
+USTRUCT(BlueprintType)
+struct FGASPrimitivesTarget 
+{
+	GENERATED_BODY()
+
+	/** Tag query to find actors to apply GAS primitives to */
+	UPROPERTY(EditAnywhere, Category = "GAS")
+	FGameplayTagQuery ActorQuery;
+
+	/** Ability sets to grant */
+	UPROPERTY(EditAnywhere, Category = "GAS")
+	TArray<TSoftObjectPtr<UGSCAbilitySet>> AbilitySets;
+};
+
 /**
- * TODO: This should apply GAS primitives to certain actors
+ * Scenario action that applies GAS primitives (Abilities, Attributes, Effects) to specified actors
  */
 UCLASS()
 class SHAREDGAMEMODE_API UGameplaySA_ApplyGASPrimitives : public UGameplayScenarioAction
 {
 	GENERATED_BODY()
-	
+public:
+	/** List of GAS primitive targets and what to apply to them */
+	UPROPERTY(EditDefaultsOnly, Category = "GAS")
+	TArray<FGASPrimitivesTarget> Targets;
+
+	/** Map of target actors to their granted ability set handles */
+	TMap<TWeakObjectPtr<AActor>, TArray<FGSCAbilitySetHandle>> GrantedAbilitySetHandles;
+
+	//~ Begin UGameplayScenarioAction interface
+	virtual void OnScenarioActivated(UScenarioInstanceSubsystem* ScenarioSubsystem) override;
+	virtual void OnScenarioDeactivated(UScenarioInstanceSubsystem* ScenarioSubsystem, bool bTearDown = false) override;
+	//~ End UGameplayScenarioAction interface
+
+private:
+	/** Finds all actors matching the tag query */
+	void GetMatchingActors(const FGameplayTagQuery& Query, TArray<AActor*>& OutActors) const;
 };

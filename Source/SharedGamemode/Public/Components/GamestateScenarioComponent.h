@@ -19,6 +19,7 @@ Copyright 2021 Empires Team
 #include "CoreMinimal.h"
 #include "Components/GameStateComponent.h"
 #include "Engine/NetSerialization.h"
+#include "Net/Serialization/FastArraySerializer.h"
 #include "GamestateScenarioComponent.generated.h"
 
 class UGameplayScenario;
@@ -32,6 +33,7 @@ public:
 	{
 		Scenario = nullptr;
 		PrevScenario = nullptr;
+		bPendingRemoval = false;
 	}
 
 	UPROPERTY()
@@ -39,6 +41,8 @@ public:
 
 	TWeakObjectPtr<UGameplayScenario> PrevScenario;
 
+	bool bPendingRemoval;
+	
 	void PreReplicatedRemove(const struct FGameplayScenarioNetworkArray& InArraySerializer);
 	void PostReplicatedAdd(const struct FGameplayScenarioNetworkArray& InArraySerializer);
 	void PostReplicatedChange(const struct FGameplayScenarioNetworkArray& InArraySerializer);
@@ -84,18 +88,42 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<class FLifetimeProperty>& OutLifetimeProps) const override;
 
 	virtual void OnRegister() override;
+	virtual void BeginPlay() override;
+	
+	// Server-side functions
+	UFUNCTION(Server, Reliable)
+	void ServerActivateScenario(UGameplayScenario* Scenario);
 
+	UFUNCTION(Server, Reliable)
+	void ServerDeactivateScenario(UGameplayScenario* Scenario);
+	
 	UFUNCTION()
 	virtual void OnScenarioActivated(UGameplayScenario* Scenario);
 	UFUNCTION()
 	virtual void OnScenarioDeactivated(UGameplayScenario* Scenario);
 
+	UFUNCTION(BlueprintPure, Category = "Scenarios")
+	bool IsScenarioActive(UGameplayScenario* Scenario) const;
 
 	UPROPERTY(Replicated)
 	FGameplayScenarioNetworkArray Scenarios;
 
 	friend struct FGameplayScenarioNetworkArrayItem;
-private:
+	
+protected:
 	void ActivateScenarioLocally(UGameplayScenario* Scenario);
 	void DeactivateScenarioLocally(UGameplayScenario* Scenario);
+
+	// Cleanup pending scenarios
+	void CleanupPendingScenarios();
+
+	// Track authority
+	bool bHasAuthority;
+
+private:
+	// Helper to find scenario in network array
+	int32 FindScenarioIndex(UGameplayScenario* Scenario) const;
+
+	// Timer handle for cleanup
+	FTimerHandle CleanupTimerHandle;
 };

@@ -37,8 +37,10 @@ public class SharedGamemode : ModuleRules
 				"DeveloperSettings",
 				"GameFeatures",
 				"ModularGameplay",
-				"NetCore",
-            });
+				"NetCore", 
+				"BattleSpace",
+				"Json"
+			});
 			
 		
 		PrivateDependencyModuleNames.AddRange(
@@ -47,7 +49,8 @@ public class SharedGamemode : ModuleRules
 				"CoreUObject",
 				"Engine",
 				"Slate",
-				"SlateCore",				
+				"SlateCore", 
+				"JsonUtilities"
 			});
 		
 		

@@ -16,13 +16,11 @@ Copyright 2021 Empires Team
 
 
 #include "GameplayScenario.h"
-#include "ScenarioInstanceSubsystem.h"
 #include "GameplayScenarioAction.h"
 
 UGameplayScenario::UGameplayScenario()
-	: Super()
+	: Super(), BaseStageProgressionTimer(0.0f)
 {
-
 }
 
 void UGameplayScenario::PreActivateScenario(UScenarioInstanceSubsystem* ScenarioSubsystem)

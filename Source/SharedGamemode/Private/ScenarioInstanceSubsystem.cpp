@@ -27,6 +27,7 @@ Copyright 2021 Empires Team
 
 #include "GameFeatureAction.h"
 #include "GameFeaturesSubsystem.h"
+#include "ScenarioReplicationProxy.h"
 
 
 DEFINE_LOG_CATEGORY_STATIC(LogGameplayScenario, Log, All);
@@ -90,6 +91,139 @@ void UScenarioInstanceSubsystem::Initialize(FSubsystemCollectionBase& Collection
 	FCoreUObjectDelegates::PreLoadMap.AddUObject(this, &ThisClass::OnPreLoadMap);
 }
 
+void UScenarioInstanceSubsystem::Deinitialize()
+{
+	// Cancel all active scenarios
+	for (UScenarioInstance* Instance : ScenarioInstances)
+	{
+		if (IsValid(Instance))
+		{
+			Instance->EndScenario(true);
+		}
+	}
+	ScenarioInstances.Empty();
+
+	// Clear pending and active scenarios
+	if (IsValid(PendingScenario))
+	{
+		PendingScenario = nullptr;
+	}
+	ActiveScenarios.Empty();
+
+	Super::Deinitialize();}
+
+UScenarioInstance* UScenarioInstanceSubsystem::StartScenario(UGameplayScenario* ScenarioAsset,
+	const FGameplayTagContainer& Tags)
+{
+	
+	if (!ReplicationProxy)
+	{
+		ReplicationProxy = GetWorld()->SpawnActor<AScenarioReplicationProxy>();
+        
+		// Explicitly initialize the proxy with the subsystem
+		if (ReplicationProxy)
+		{
+			ReplicationProxy->SetOwningSubsystem(this);
+		}
+	}
+
+	// Create the scenario instance
+	UScenarioInstance* Instance = NewObject<UScenarioInstance>(ReplicationProxy);
+    
+	if (Instance->InitScenario(ScenarioAsset, Tags))
+	{
+		// Add to replicated instances
+		ReplicationProxy->AddReplicatedInstance(Instance);
+		ScenarioInstances.Add(Instance);
+		return Instance;
+	}
+
+	return nullptr;
+}
+
+void UScenarioInstanceSubsystem::CancelScenario(UScenarioInstance* Instance)
+{
+	if (!IsValid(Instance))
+	{
+		return;
+	}
+
+	// Cancel the scenario if it's active
+	if (Instance->IsActive())
+	{
+		Instance->EndScenario(true);  // Pass true to indicate cancellation
+	}
+}
+
+void UScenarioInstanceSubsystem::ForEachScenario(TFunctionRef<void(const UScenarioInstance*)> Pred) const
+{
+	for (const UScenarioInstance* Instance : ScenarioInstances)
+	{
+		if (IsValid(Instance))
+		{
+			Pred(Instance);
+		}
+	}
+}
+
+void UScenarioInstanceSubsystem::ForEachScenario_Mutable(TFunctionRef<void(UScenarioInstance*)> Pred)
+{
+	for (UScenarioInstance* Instance : ScenarioInstances)
+	{
+		if (IsValid(Instance))
+		{
+			Pred(Instance);
+		}
+	}
+}
+
+void UScenarioInstanceSubsystem::OnScenarioEnded(UScenarioInstance* Instance, bool bWasCancelled)
+{
+	// Clean up instance
+	Instance->OnScenarioEnded.RemoveAll(this);
+	ScenarioInstances.Remove(Instance);
+
+	if (IsValid(ReplicationProxy))
+	{
+		ReplicationProxy->RemoveReplicatedInstance(Instance);
+	}
+}
+
+void UScenarioInstanceSubsystem::NotifyAddedScenarioFromReplication(UScenarioInstance* Instance)
+{
+	if (IsValid(Instance))
+	{
+		ScenarioInstances.Add(Instance);
+
+		// Notify state change using the delegate
+		NotifyScenarioStateChanged(
+			FScenarioStateChanged(
+				Instance, 
+				EScenarioState::Active, 
+				EScenarioState::None
+			)
+		);
+	}
+}
+
+void UScenarioInstanceSubsystem::NotifyRemovedScenarioFromReplication(UScenarioInstance* Instance)
+{
+	if (IsValid(Instance))
+	{
+		ScenarioInstances.Remove(Instance);
+
+
+		// Notify state change using the delegate
+		NotifyScenarioStateChanged(
+			FScenarioStateChanged(
+				Instance, 
+				Instance->GetState(), 
+				EScenarioState::Active
+			)
+		);
+	}
+}
+
 void UScenarioInstanceSubsystem::SetPendingScenario(UGameplayScenario* Scenairo)
 {
 	PendingScenario = Scenairo;
@@ -109,6 +243,11 @@ void UScenarioInstanceSubsystem::TransitionToPendingScenario(bool bForce)
 	StartActivatingScenario(Scenario, bForce);
 }
 
+
+void UScenarioInstanceSubsystem::SetReplicationProxy(AScenarioReplicationProxy* Proxy)
+{
+	ReplicationProxy = Proxy;
+}
 
 void UScenarioInstanceSubsystem::PreActivateScenario(FPrimaryAssetId ScenarioAsset, bool bForce)
 {

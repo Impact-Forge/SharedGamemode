@@ -17,14 +17,40 @@ Copyright 2021 Empires Team
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ScenarioInstance.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "ScenarioInstanceSubsystem.generated.h"
 
 class UGameplayScenario;
 class ULevelStreamingDynamic;
 class UGameplaySA_ChangeMap;
+class AScenarioReplicationProxy;
+
+// Struct to represent scenario state change
+USTRUCT()
+struct FScenarioStateChanged
+{
+	GENERATED_BODY()
+
+public:
+	UScenarioInstance* Instance;
+	EScenarioState NewState;
+	EScenarioState OldState;
+
+	FScenarioStateChanged(): Instance(nullptr), NewState(), OldState()
+	{
+	}
+
+	FScenarioStateChanged(UScenarioInstance* InInstance, EScenarioState InNewState, EScenarioState InOldState)
+		: Instance(InInstance)
+		, NewState(InNewState)
+		, OldState(InOldState)
+	{}
+};
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FScenarioDelegate, UGameplayScenario*, Scenario);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnScenarioStateChanged, const FScenarioStateChanged&);
+
 
 /**
  * 
@@ -37,12 +63,23 @@ public:
 	UScenarioInstanceSubsystem();
 
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+	virtual void Deinitialize() override;
 
+	UFUNCTION(BlueprintCallable, Category = "Scenario")
+	UScenarioInstance* StartScenario(UGameplayScenario* ScenarioAsset, const FGameplayTagContainer& Tags);
+
+	UFUNCTION(BlueprintCallable, Category = "Scenario")
+	void CancelScenario(UScenarioInstance* Instance);
+	
 	UFUNCTION(BlueprintCallable, Category="Scenario")
 	virtual void SetPendingScenario(UGameplayScenario* Scenairo);
 	UFUNCTION(BlueprintCallable, Category = "Scenario")
 	virtual void TransitionToPendingScenario(bool bForce = false);
 
+	// Instance iteration
+	void ForEachScenario(TFunctionRef<void(const UScenarioInstance*)> Pred) const;
+	void ForEachScenario_Mutable(TFunctionRef<void(UScenarioInstance*)> Pred);
+	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Scenario")
 	TArray<UGameplayScenario*> ActiveScenarios;
 	
@@ -61,6 +98,19 @@ public:
 	UPROPERTY(BlueprintAssignable)
 	FScenarioDelegate OnScenarioDeactivated;
 
+	// Add this to your existing subsystem class
+	FOnScenarioStateChanged OnScenarioStateChanged;
+
+	// Replace BroadcastMessage with a method that uses the delegate
+	void NotifyScenarioStateChanged(const FScenarioStateChanged& StateChange)
+	{
+		OnScenarioStateChanged.Broadcast(StateChange);
+	}
+
+	// Method can use forward-declared type
+	void SetReplicationProxy(AScenarioReplicationProxy* Proxy);
+
+	
 	friend class UGameplaySA_ActivateScenario;
 	friend class UGameplaySA_DeactivateScenario;
 	friend class UGamestateScenarioComponent;
@@ -81,9 +131,21 @@ protected:
 	virtual void OnPostLoadMap(UWorld* World);
 	virtual void OnPreLoadMap(const FString& MapName);
 
-
 	void StartActivatingScenario(UGameplayScenario* Scenario, bool bForce);
 	void FinishActivatingScenario(UGameplayScenario* Scenario, bool bForce);
 
 	void TransitionToWorld(FPrimaryAssetId World);
+
+	// Active scenario tracking
+	UPROPERTY()
+	TArray<UScenarioInstance*> ScenarioInstances;
+
+	// Replication support
+	UPROPERTY()
+	AScenarioReplicationProxy* ReplicationProxy;
+
+private:
+	void OnScenarioEnded(UScenarioInstance* Instance, bool bWasCancelled);
+	void NotifyAddedScenarioFromReplication(UScenarioInstance* Instance);
+	void NotifyRemovedScenarioFromReplication(UScenarioInstance* Instance);
 };

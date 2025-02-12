@@ -21,6 +21,7 @@ Copyright 2021 Empires Team
 #include "GameplayTags.h"
 #include "GameplayScenario.generated.h"
 
+class UScenarioStage;
 class UGameplayScenarioAction;
 class UScenarioInstanceSubsystem;
 
@@ -34,6 +35,15 @@ class SHAREDGAMEMODE_API UGameplayScenario : public UPrimaryDataAsset, public IG
 public:
 	UGameplayScenario();
 
+	// First stage that starts when scenario begins
+	UPROPERTY(VisibleAnywhere, Category = "Stages")
+	UScenarioStage* InitialStage;
+
+	// Collection of all stages in this scenario for validation
+	UPROPERTY()
+	TArray<UScenarioStage*> AllStages;
+	
+	
 	//Optional Map.  If set, this will be loaded when the scenario is activated
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Actions", meta = (AllowedTypes = "Map"), AssetRegistrySearchable)
 	FPrimaryAssetId Map;
@@ -41,7 +51,6 @@ public:
 	//Actions to run when the scenario is activated
 	UPROPERTY(EditDefaultsOnly, Instanced, Category = "Actions")
 	TArray<UGameplayScenarioAction*> ScenarioActions;
-
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI", AssetRegistrySearchable)
 	FText Name;
@@ -63,4 +72,8 @@ public:
 
 	using ConstPredicate = TFunctionRef<void(const UGameplayScenarioAction*)>;
 	void ForEachAction(ConstPredicate Predicate) const;
+
+	/** Base time (in seconds) to wait between stage transitions */
+	UPROPERTY(EditAnywhere, Category = "Scenario")
+	float BaseStageProgressionTimer;
 };
